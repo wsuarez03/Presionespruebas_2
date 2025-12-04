@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Validación de Incertidumbre Banco</title>
+
+<style>
+body { font-family: sans-serif; padding: 20px; background: #f5f5f5; color: #333; }
+h1 { text-align: center; margin-bottom: 20px; }
+table { width: auto; border-collapse: collapse; background: white; margin-bottom: 30px; }
+td, th { border: 1px solid #ccc; padding: 10px; text-align: center; }
+th { background: #e8e8e8; }
+</style>
+
+<!-- jStat para student t -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jstat/1.9.5/jstat.min.js"></script>
+
+</head>
+<body>
+
+<h1>Validación De Incertidumbre Banco</h1>
+
+<!-- TABLA MANÓMETROS -->
+<table id="tablaManometros">
+<tr>
+<th>Manómetro</th>
+<th>U_Presión apertura</th>
+<th>Grados de libertad</th>
+<th>Factor de cobertura (k)</th>
+<th>U expandida</th>
+</tr>
+<tr><td>Manómetro Crystal 0-5000 psi</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>Manómetro Additel 0-3000 psi</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>Manómetro Crystal 0-1000 psi</td><td></td><td></td><td></td><td></td></tr>
+</table>
+
+<!-- TABLA DATOS MEDIDOS -->
+<table id="tablaDatosMedidos">
+<tr><th colspan="2">Datos medidos</th></tr>
+<tr><th>N</th><th>Pm (psi)</th></tr>
+<tr><td>1</td><td id="pm1"></td></tr>
+<tr><td>2</td><td id="pm2"></td></tr>
+<tr><td>3</td><td id="pm3"></td></tr>
+<tr><td>4</td><td id="pm4"></td></tr>
+<tr><td><strong>Promedio</strong></td><td id="promedio"></td></tr>
+</table>
+
+<!-- TABLA ECUACIÓN -->
+<table id="Datos_ecuación_1">
+<tr>
+<th>Datos ecuación</th>
+<th>Resolución (psi)</th>
+<th>Deriva (psi)</th>
+<th>Interpolación</th>
+<th>Lectura (psi)</th>
+<th>Certificado (psi)</th>
+<th>Factor de cobertura</th>
+</tr>
+<tr><td>Manómetro Crystal 0-5000 psi</td><td>0.1</td><td>0.59</td><td>0.162163468825291</td><td></td><td>0.38</td><td>1.97</td></tr>
+<tr><td>Manómetro Additel 0-3000 psi</td><td>0.1</td><td>0.35</td><td>0.75</td><td></td><td>0.35</td><td>1.97</td></tr>
+<tr><td>Manómetro Crystal 0-1000 psi</td><td>0.1</td><td>0.092</td><td>0.0169880966040896</td><td></td><td>0.092</td><td>2</td></tr>
+</table>
+
+<!-- TABLA MAGNITUD -->
+<table id="Magnitud">
+<tr>
+<th>Magnitud</th>
+<th>u resolución (psi)</th>
+<th>u deriva (psi)</th>
+<th>u Interpolación (psi)</th>
+<th>u Lectura (psi)</th>
+<th>u certificado (psi)</th>
+<th>u combinada (psi)</th>
+<th>Grados de libertad</th>
+</tr>
+<tr><td>Manómetro Crystal 0-5000 psi</td><td></td><td></td><td>0.162163468825291</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>Manómetro Additel 0-3000 psi</td><td></td><td></td><td>0.75</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>Manómetro Crystal 0-1000 psi</td><td></td><td></td><td>0.0169880966040896</td><td></td><td></td><td></td><td></td></tr>
+</table>
+
+<!-- OPERARIOS -->
+<table id="tablaIncertidumbreOperarios">
+<tr><th colspan="2">Incertidumbre por operario (psi)</th></tr>
+<tr><th>Operario</th><th>Datos</th></tr>
+
+<tr><td rowspan="3">Jonathan<br>Garzón</td><td>65.08</td></tr>
+<tr><td>65.28</td></tr>
+<tr><td>65.08</td></tr>
+
+<tr><td rowspan="3">Alexander<br>Castro</td><td>65.01</td></tr>
+<tr><td>65.16</td></tr>   
+<tr><td>65.19</td></tr>
+
+<tr><td rowspan="3">Carlos<br>Suarez</td><td>65.34</td></tr>
+<tr><td>65.16</td></tr>
+<tr><td>64.86</td></tr>
+
+<tr><td rowspan="3">Brayan<br>García</td><td>64.7</td></tr>
+<tr><td>65.1</td></tr>
+<tr><td>65.23</td></tr>
+
+<tr><td rowspan="3">Heliodoro<br>Prada</td><td>65.16</td></tr>
+<tr><td>65.06</td></tr>
+<tr><td>64.96</td></tr>
+</table>
+
+<!-- RESUMEN -->
+<table id="tablaResumen">
+<tr><th>Datos</th><th>Desviación</th><th>Incertidumbre</th></tr>
+<tr><td id="cantDatos"></td><td id="desviacion"></td><td id="incertidumbre"></td></tr>
+</table>
+
+<script>
+// ======================================
+// Funciones auxiliares
+// ======================================
+function tInvNumeric(prob, df, tol = 1e-12, maxIter = 200) {
+    if (!(prob > 0 && prob < 1) || df <= 0) return NaN;
+
+    const sign = prob < 0.5 ? -1 : 1;
+    const target = prob < 0.5 ? 1 - prob : prob;
+
+    let lo = 0;
+    let hi = 1;
+
+    while (jStat.studentt.cdf(hi, df) < target) {
+        hi *= 2;
+        if (hi > 1e6) break;
+    }
+
+    for (let i = 0; i < maxIter; i++) {
+        const mid = (lo + hi) / 2;
+        const cdfMid = jStat.studentt.cdf(mid, df);
+
+        if (Math.abs(cdfMid - target) < tol) return sign * mid;
+
+        if (cdfMid < target) lo = mid;
+        else hi = mid;
+    }
+
+    return sign * (lo + hi) / 2;
+}
+
+function desviacionEstandar(valores) {
+    const n = valores.length;
+    if (n < 2) return 0;
+    const mean = valores.reduce((a,b)=>a+b,0)/n;
+    const variance = valores.reduce((s,x)=>s+(x-mean)**2,0)/(n-1);
+    return Math.sqrt(variance);
+}
+
+// ======================================
+// PROCESO PRINCIPAL
+// ======================================
+document.addEventListener("DOMContentLoaded", () => {
+    const datos = JSON.parse(localStorage.getItem("presiones_banco"));
+    if (!datos) return;
+
+    document.getElementById("p1").value = datos.p1;
+    document.getElementById("p2").value = datos.p2;
+    document.getElementById("p3").value = datos.p3;
+    document.getElementById("p4").value = datos.p4;
+
+    // Mostrar tabla
+    for (let i = 0; i < 4; i++) {
+        const celda = document.getElementById(`pm${i+1}`);
+        celda.textContent = presiones[i] !== undefined ? presiones[i] + " PSI" : "-";
+    }
+
+    // PROMEDIO
+    const promedio = presiones.length ? presiones.reduce((a,b)=>a+b,0)/presiones.length : 0;
+    document.getElementById("promedio").textContent = promedio.toFixed(2) + " PSI";
+
+    // DESVIACIÓN PARA TABLA ECUACIÓN
+    const desvia = desviacionEstandar(presiones);
+    const tablaDatos = document.getElementById("Datos_ecuación_1");
+    for (let r=1; r<tablaDatos.rows.length; r++) {
+        tablaDatos.rows[r].cells[4].textContent = desvia.toFixed(8);
+    }
+
+    // =====================================================
+    // INCERTIDUMBRE OPERARIOS
+    // =====================================================
+    const tablaOperarios = document.getElementById("tablaIncertidumbreOperarios");
+    const datosOperarios = [];
+
+    for (let fila of tablaOperarios.rows) {
+        for (let celda of fila.cells) {
+            const val = parseFloat(celda.textContent.replace(",","."));
+            if (!isNaN(val)) datosOperarios.push(val);
+        }
+    }
+
+    const incertidumbreGlobal = datosOperarios.length
+        ? desviacionEstandar(datosOperarios)/Math.sqrt(datosOperarios.length)
+        : 0;
+
+    document.getElementById("cantDatos").textContent = datosOperarios.length;
+    document.getElementById("desviacion").textContent = desviacionEstandar(datosOperarios).toFixed(8);
+    document.getElementById("incertidumbre").textContent = incertidumbreGlobal.toFixed(8);
+
+    // =====================================================
+    // PROCESAR TABLA MAGNITUD Y TABLA MANÓMETROS
+    // =====================================================
+    const tablaMagnitud = document.getElementById("Magnitud");
+    const tablaManometros = document.getElementById("tablaManometros");
+
+    for (let i = 1; i < tablaMagnitud.rows.length; i++) {
+
+        const res = parseFloat(tablaDatos.rows[i].cells[1].textContent);
+        const der = parseFloat(tablaDatos.rows[i].cells[2].textContent);
+        const interp = parseFloat(tablaMagnitud.rows[i].cells[3].textContent);
+        const lectura = parseFloat(tablaDatos.rows[i].cells[4].textContent);
+        const certificado = parseFloat(tablaDatos.rows[i].cells[5].textContent);
+        const factorCert = parseFloat(tablaDatos.rows[i].cells[6].textContent);
+
+        const u_res = res/Math.sqrt(12);
+        const u_der = der/Math.sqrt(3);
+        const u_interp = interp;
+        const u_lectura = lectura / Math.sqrt(presiones.length);
+        const u_cert = certificado / factorCert;
+
+        const u_comb = Math.sqrt(u_res**2 + u_der**2 + u_interp**2 + u_lectura**2 + u_cert**2);
+
+        tablaMagnitud.rows[i].cells[1].textContent = u_res.toFixed(9);
+        tablaMagnitud.rows[i].cells[2].textContent = u_der.toFixed(9);
+        tablaMagnitud.rows[i].cells[4].textContent = u_lectura.toFixed(9);
+        tablaMagnitud.rows[i].cells[5].textContent = u_cert.toFixed(9);
+        tablaMagnitud.rows[i].cells[6].textContent = u_comb.toFixed(9);
+
+        // GRADOS DE LIBERTAD DEL COMPONENTE
+        const v = Math.pow(u_comb,4) /
+                  ( (u_res**4/200) + (u_der**4/50) + (u_interp**4/10) + (u_lectura**4/3) + (u_cert**4/200) );
+
+        tablaMagnitud.rows[i].cells[7].textContent = v.toFixed(8);
+
+        // U presión apertura
+        const u_pres = Math.sqrt(u_comb**2 + incertidumbreGlobal**2);
+        tablaManometros.rows[i].cells[1].textContent = u_pres.toFixed(10);
+
+        // GRADOS DE LIBERTAD DEL MANÓMETRO
+        const v_man = Math.pow(u_pres,4) /
+                      ( (u_comb**4 / v) + (incertidumbreGlobal**4 / 14) );
+
+        const v_man_red = Math.floor(v_man);
+        tablaManometros.rows[i].cells[2].textContent = v_man_red;
+
+        // FACTOR K
+        const confianza = 0.9545;
+        const tail = (1-confianza)/2;
+        const prob = 1 - tail;
+        const k = Math.abs(tInvNumeric(prob, v_man_red));
+
+        tablaManometros.rows[i].cells[3].textContent = k.toFixed(12);
+
+        // U EXPANDIDA
+        tablaManometros.rows[i].cells[4].textContent = (u_pres * k).toFixed(10);
+    }
+
+});
+</script>
+
+<button onclick="window.location.href='index.html'" 
+    style="margin-top:20px; padding:10px 20px;">
+← Volver a Verificación de Presiones
+</button>
+
+</body>
+</html>
