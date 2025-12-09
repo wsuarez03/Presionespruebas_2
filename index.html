@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Verificación De Presiones</title>
+  <link rel="manifest" href="manifest.json" />
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+      max-width: 600px;
+      margin: auto;
+      background-color: #f9f9f9;
+      color: #333;
+    }
+    .titulo { text-align: left; }
+    @media (max-width: 600px) { .titulo { text-align: center; } .fila-doble { flex-direction: column; } }
+    input, select {
+      display: block;
+      width: 100%;
+      padding: 12px;
+      margin: 6px 0;
+      border-radius: 6px;
+      border: 1px solid #ccc;
+      font-size: 16px;
+      box-sizing: border-box;
+      background-color: #fff;
+    }
+    .fila-doble { display: flex; gap: 10px; margin-bottom: 15px; }
+    .columna { flex: 1; display: flex; flex-direction: column; gap: 4px; }
+    button {
+      display: block;
+      width: 100%;
+      padding: 12px;
+      margin: 10px 0;
+      border-radius: 6px;
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      cursor: pointer;
+    }
+    button:hover { background-color: #45a049; }
+    #resultado {
+      font-weight: bold;
+      font-size: 1.05em;
+      margin-top: 18px;
+      color: #333;
+      white-space: pre-line;
+    }
+    .logo { display: block; margin: 0 auto 20px; max-width: 250px; height: auto; }
+  </style>
+</head>
+
+<body>
+  <img src="LOGO VALSER.png" alt="Logo" class="logo">
+  <h1 class="titulo">PRUEBAS DE PRESIONES</h1>
+
+  <input type="text" id="Client_Proy" placeholder="Cliente/Proyecto">
+
+  <div class="fila-doble">
+    <div class="columna">
+      <input type="text" id="Tag" placeholder="Tag/Serial">
+      <select id="sel_prueb">
+        <option value="" disabled selected>Tipo de prueba</option>
+        <option value="Banco">Banco</option>
+        <option value="VST 2">VST 2</option>
+        <option value="VST 3">VST 3</option>
+      </select>
+
+      <select id="manometro" style="display:none;">
+        <option value="" disabled selected>Manómetro</option>
+        <option value="MAN-002">MAN-002 (Crystal 5k)</option>
+        <option value="MAN-003">MAN-003 (Additel)</option>
+        <option value="MAN-005">MAN-005 (Crystal 1k)</option>
+        <option value="MAN-006">MAN-006 (Wika)</option>
+      </select>
+
+      <select id="transmisor" style="display:none;">
+        <option value="" disabled selected>Transmisor</option>
+        <option value="TP-002">TP-002 (5000 psi)</option>
+        <option value="TP-004">TP-004 (145 psi)</option>
+        <option value="TP-008">TP-008 (870 psi)</option>
+        <option value="TP-009">TP-009 (3625 psi)</option>
+        <option value="TP-010">TP-010 (1000 psi)</option>
+      </select>
+
+      <input type="number" id="diametro_ext" placeholder="Diámetro externo" style="display:none;">
+      <input type="number" id="pres_caldera" placeholder="Presión de caldera" style="display:none;">
+    </div>
+
+    <div class="columna">
+      <select id="sel_seccion">
+        <option value="" disabled selected>Sección válvula</option>
+        <option value="Sec. I">Sec. I</option>
+        <option value="Sec. VIII">Sec. VIII</option>
+      </select>
+      <input type="number" id="set" placeholder="Set de presión válvula">
+      <select id="celdas" style="display:none;">
+        <option value="" disabled selected>Celda de carga</option>
+        <option value="CEC-001">CEC-001 (0.5 T)</option>
+        <option value="CEC-003">CEC-003 (2 T)</option>
+        <option value="CEC-004">CEC-004 (1 T)</option>
+        <option value="CEC-005">CEC-005 (1 T)</option>
+        <option value="CEC-006">CEC-006 (2 T)</option>
+        <option value="CEC-007">CEC-007 (5 T)</option>
+      </select>
+      <input type="number" id="diametro_int" placeholder="Diámetro interno" style="display:none;">
+    </div>
+  </div>
+
+  <input type="number" id="p1" placeholder="Escape 1 (PSI)">
+  <input type="number" id="p2" placeholder="Escape 2 (PSI)">
+  <input type="number" id="p3" placeholder="Escape 3 (PSI)">
+  <input type="number" id="p4" placeholder="Escape 4 (PSI)">
+
+  <button onclick="validar()">✅ Verificar</button>
+  <button onclick="enviarCorreo()">📤 Enviar pruebas aprobadas</button>
+
+  <div id="resultado"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jstat/1.9.5/jstat.min.js"></script>
+
+  <script>
+    // =========================
+    // FUNCIONES AUXILIARES
+    // =========================
+    function tInvNumeric(prob, df, tol = 1e-12, maxIter = 200) {
+      if (!(prob > 0 && prob < 1) || df <= 0) return NaN;
+      if (typeof jStat !== "undefined" && typeof jStat.studentt.inv === "function") return jStat.studentt.inv(prob, df);
+      const sign = prob < 0.5 ? -1 : 1;
+      const target = prob < 0.5 ? 1 - prob : prob;
+      let lo = 0, hi = 1;
+      while (jStat.studentt.cdf(hi, df) < target) hi *= 2;
+      for (let i=0;i<maxIter;i++){ const mid=(lo+hi)/2; const cdfMid=jStat.studentt.cdf(mid, df); if(Math.abs(cdfMid-target)<tol) return sign*mid; if(cdfMid<target) lo=mid; else hi=mid; }
+      return sign*(lo+hi)/2;
+    }
+
+    function desviacionEstandar(valores){
+      const n = valores.length;
+      if(n<2) return 0;
+      const mean = valores.reduce((a,b)=>a+b,0)/n;
+      const variance = valores.reduce((sum,x)=>sum+Math.pow(x-mean,2),0)/(n-1);
+      return Math.sqrt(variance);
+    }
+
+    const MANOMETER_DATA = {
+      "MAN-002": {resolucion:0.1, deriva:0.59, u_interp:0.162163468825291, certificado:0.38, factor_cert:1.97, divisor_interp:6},
+      "MAN-003": {resolucion:0.1, deriva:0.35, u_interp:0.75, certificado:0.35, factor_cert:1.97, divisor_interp:10},
+      "MAN-005": {resolucion:0.1, deriva:0.092, u_interp:0.0169880966040896, certificado:0.092, factor_cert:2, divisor_interp:10}
+    };
+
+    const OPERATOR_DATA = [65.08,65.28,65.08,65.01,65.16,65.19,65.34,65.16,64.86,64.7,65.1,65.23,65.16,65.06,64.96];
+
+    document.addEventListener('DOMContentLoaded', () => {
+      const selPrueba=document.getElementById("sel_prueb");
+      const manometro=document.getElementById("manometro");
+      const transmisor=document.getElementById("transmisor");
+      const celdas=document.getElementById("celdas");
+      const diametro_ext=document.getElementById("diametro_ext");
+      const diametro_int=document.getElementById("diametro_int");
+      const pres_caldera=document.getElementById("pres_caldera");
+      const p4=document.getElementById("p4");
+
+      selPrueba.addEventListener("change", () => {
+        const tipo=selPrueba.value;
+        if(["VST 2","VST 3"].includes(tipo)){ p4.style.display="none"; p4.value=""; } else { p4.style.display="block"; }
+        if(tipo==="Banco"){ manometro.style.display="block"; transmisor.style.display="none"; transmisor.value=""; celdas.style.display="none"; celdas.value=""; diametro_ext.style.display="none"; diametro_ext.value=""; diametro_int.style.display="none"; diametro_int.value=""; pres_caldera.style.display="none"; pres_caldera.value=""; }
+        if(["VST 2","VST 3"].includes(tipo)){ manometro.style.display="none"; manometro.value=""; transmisor.style.display="block"; celdas.style.display="block"; diametro_ext.style.display="block"; diametro_int.style.display="block"; pres_caldera.style.display="block"; filtrarTransmisoresYCeldas(tipo); }
+      });
+
+      function filtrarTransmisoresYCeldas(tipo){
+        const opcionesTrans={"VST 2":["TP-008","TP-009"],"VST 3":["TP-002","TP-004","TP-010"]};
+        const opcionesCeldas={"VST 2":["CEC-005","CEC-006","CEC-007"],"VST 3":["CEC-001","CEC-004","CEC-003"]};
+        [...transmisor.options].forEach(opt=>{if(opt.value==="")return; opt.disabled=!opcionesTrans[tipo].includes(opt.value); opt.style.display=opt.disabled?"none":"block";});
+        [...celdas.options].forEach(opt=>{if(opt.value==="")return; opt.disabled=!opcionesCeldas[tipo].includes(opt.value); opt.style.display=opt.disabled?"none":"block";});
+        transmisor.value=""; celdas.value="";
+      }
+    });
+
+    try{ emailjs.init("tlcM6igKsBWhU-7x1"); }catch(e){console.warn("EmailJS init falló:",e); }
+
+    function mostrarMensaje(msg){ document.getElementById("resultado").innerText=msg; }
+
+    function validar(){
+      mostrarMensaje("");
+      let U=null; let mensajeIncert="";
+      const client_proy=document.getElementById("Client_Proy").value.trim();
+      const tag=document.getElementById("Tag").value.trim();
+      const set=parseFloat(document.getElementById("set").value);
+      const seccion=document.getElementById("sel_seccion").value;
+      const tipo=document.getElementById("sel_prueb").value;
+      const manometro=document.getElementById("manometro").value;
+      const transmisor=document.getElementById("transmisor").value;
+      const celdas=document.getElementById("celdas").value;
+      const diametro_ext=parseFloat(document.getElementById("diametro_ext").value);
+      const diametro_int=parseFloat(document.getElementById("diametro_int").value);
+      const pres_caldera=parseFloat(document.getElementById("pres_caldera").value);
+      const p1=parseFloat(document.getElementById("p1").value);
+      const p2=parseFloat(document.getElementById("p2").value);
+      const p3=parseFloat(document.getElementById("p3").value);
+      const p4_val=parseFloat(document.getElementById("p4").value);
+
+      if(isNaN(set)) return mostrarMensaje("⚠️ Falta set de presión válvula.");
+      if(!tipo) return mostrarMensaje("⚠️ Debes seleccionar tipo de prueba.");
+      if(!seccion) return mostrarMensaje("⚠️ Debes seleccionar la sección.");
+      if(tipo==="Banco" && !manometro) return mostrarMensaje("⚠️ Debes seleccionar manómetro.");
+      if(["VST 2","VST 3"].includes(tipo) && !transmisor) return mostrarMensaje("⚠️ Debes seleccionar transmisor.");
+      if(["VST 2","VST 3"].includes(tipo) && !celdas) return mostrarMensaje("⚠️ Debes seleccionar celda de carga.");
+      if(["VST 2","VST 3"].includes(tipo) && isNaN(diametro_ext)) return mostrarMensaje("⚠️ Falta diametro externo.");
+      if(["VST 2","VST 3"].includes(tipo) && isNaN(diametro_int)) return mostrarMensaje("⚠️ Falta diametro interno.");
+      if(["VST 2","VST 3"].includes(tipo) && isNaN(pres_caldera)) return mostrarMensaje("⚠️ Falta presión de caldera.");
+
+      let presiones=[{nombre:"Escape 1",valor:p1},{nombre:"Escape 2",valor:p2},{nombre:"Escape 3",valor:p3}];
+      if(tipo==="Banco") presiones.push({nombre:"Escape 4",valor:p4_val});
+      if(presiones.some(p=>isNaN(p.valor))) return mostrarMensaje(`⚠️ Faltan presiones para ${tipo}`);
+
+      const promedio=presiones.reduce((acc,p)=>acc+p.valor,0)/presiones.length;
+      const deltaRep=promedio>50?promedio*0.01:0.5;
+      const infRep=promedio-deltaRep;
+      const supRep=promedio+deltaRep;
+      const erroresRep=presiones.filter(p=>p.valor<infRep||p.valor>supRep).map(p=>`${p.nombre}: ${p.valor} PSI fuera del rango de repetibilidad`);
+
+      let deltaSeccion=0;
+      if(seccion==="Sec. I"){ if(set<=70) deltaSeccion=2; else if(set<=300) deltaSeccion=set*0.03; else if(set<=1000) deltaSeccion=10; else deltaSeccion=set*0.01; }
+      else if(seccion==="Sec. VIII") deltaSeccion=set<=70?2:set*0.03;
+
+      const infSeccion=set-deltaSeccion;
+      const supSeccion=set+deltaSeccion;
+      const erroresSec=presiones.filter(p=>p.valor<infSeccion||p.valor>supSeccion).map(p=>`${p.nombre}: ${p.valor} PSI fuera del rango por sección`);
+
+      let manometroOK=true;
+      if(tipo==="Banco"){
+        if(set<=600 && ["MAN-005","MAN-006"].includes(manometro)) manometroOK=true;
+        else if(set>600 && set<800 && ["MAN-002","MAN-003","MAN-005","MAN-006"].includes(manometro)) manometroOK=true;
+        else if(set>=800 && ["MAN-002","MAN-003"].includes(manometro)) manometroOK=true;
+        else manometroOK=false;
+      }
+
+      let aprobadoIncertidumbre=true;
+      let criterio=promedio*0.01;
+
+      if(tipo==="Banco"){
+        const data=MANOMETER_DATA[manometro];
+        if(!manometroOK){ aprobadoIncertidumbre=false; mensajeIncert=`❌ Manómetro no adecuado para el set indicado.`; }
+        else if(!data){ aprobadoIncertidumbre=false; mensajeIncert=`⚠️ No hay datos de incertidumbre registrados para ${manometro}.`; try{ localStorage.removeItem(`U_${manometro}`); }catch(e){} }
+        else {
+          const incertidumbreGlobal=OPERATOR_DATA.length>0?desviacionEstandar(OPERATOR_DATA)/Math.sqrt(OPERATOR_DATA.length):0;
+          const u_res=data.resolucion/Math.sqrt(12);
+          const u_der=data.deriva/Math.sqrt(3);
+          const u_interp=data.u_interp;
+          const u_cert=data.certificado/data.factor_cert;
+          const muestra=presiones.map(p=>Number(p.valor));
+          const desvia=desviacionEstandar(muestra);
+          const u_lectura=muestra.length>0?desvia/Math.sqrt(muestra.length):0;
+          const u_comb=Math.sqrt(u_res**2+u_der**2+u_interp**2+u_lectura**2+u_cert**2);
+          const divisorInterp=data.divisor_interp;
+          const denom=(Math.pow(u_res,4)/200)+(Math.pow(u_der,4)/50)+(Math.pow(u_interp,4)/divisorInterp)+(Math.pow(u_lectura,4)/3)+(Math.pow(u_cert,4)/200);
+          const v=denom>0?Math.pow(u_comb,4)/denom:NaN;
+          const u_presion=Math.sqrt(u_comb**2+incertidumbreGlobal**2);
+          const v_manometro_den=(Math.pow(u_comb,4)/(isFinite(v)&&v>0?v:1e-12))+(Math.pow(incertidumbreGlobal,4)/14);
+          const v_manometro=v_manometro_den>0?Math.pow(u_presion,4)/v_manometro_den:NaN;
+          const gl_redon=isFinite(v_manometro)?Math.floor(v_manometro):100;
+          const confianza=0.9545;
+          const tail=(1-confianza)/2;
+          const prob=1-tail;
+          let k=1.96;
+          try{ const tval=tInvNumeric(prob,gl_redon); if(isFinite(tval)) k=Math.abs(tval); }catch(e){ k=1.96; }
+          U=isFinite(k)?u_presion*k:null;
+          if(U!==null) try{ localStorage.setItem(`U_${manometro}`,Number(U).toFixed(6)); }catch(e){}
+          if(U===null) { aprobadoIncertidumbre=false; mensajeIncert=`❌ Error en el cálculo de U expandida.`; }
+          else if(criterio<U){ aprobadoIncertidumbre=false; mensajeIncert=`❌ Incertidumbre (${U.toFixed(6)}) mayor que criterio (1%): ${criterio.toFixed(6)}`; }
+          else mensajeIncert=`✅ Criterio de incertidumbre ok. U expandida: ${U.toFixed(6)}. Criterio (1%): ${criterio.toFixed(6)}`;
+        }
+      }
+      else if(["VST 2","VST 3"].includes(tipo)){
+        const U_expandida_almacenada=localStorage.getItem("U_expandida_VST");
+        if(!U_expandida_almacenada){
+          aprobadoIncertidumbre=false;
+          mensajeIncert=`⚠️ No hay datos de incertidumbre expandida para VST. Consulta primero la validación VST.`;
+        }else{
+          U=parseFloat(U_expandida_almacenada);
+          const valorMaximoIncertidumbre=promedio*0.01;
+          if(valorMaximoIncertidumbre<U){
+            aprobadoIncertidumbre=false;
+            mensajeIncert=`❌ Incertidumbre expandida`;
+          }else{
+            mensajeIncert=`✅ Criterio de incertidumbre ok. Valor máximo permitido (1%): ${valorMaximoIncertidumbre.toFixed(6)}. Incertidumbre expandida: ${U.toFixed(6)}`;
+          }
+        }
+      }
+
+      const aprobadoBase=erroresRep.length===0 && erroresSec.length===0;
+      const aprobadoFinal=aprobadoBase && manometroOK && aprobadoIncertidumbre;
+
+      let resultado=aprobadoFinal?"✅ Aprobado":"❌ Repite";
+      if(erroresRep.length) resultado+=`\n\n- Falló repetibilidad\n${erroresRep.join("\n")}`;
+      if(erroresSec.length) resultado+=`\n\n- Falló sección\n${erroresSec.join("\n")}`;
+      if(!manometroOK) resultado+=`\n\n❌ Manómetro mal seleccionado.`;
+      if(!aprobadoIncertidumbre) resultado+=`\n\n${mensajeIncert}`;
+      resultado+=`\n\nRango repetibilidad: ${infRep.toFixed(2)} - ${supRep.toFixed(2)} PSI\nRango por sección: ${infSeccion.toFixed(2)} - ${supSeccion.toFixed(2)} PSI`;
+
+      mostrarMensaje(resultado);
+
+
+    // GUARDAR TRANSMISOR Y CELDA DE CARGA
+        localStorage.setItem("transmisor_VST", JSON.stringify(transmisor));
+        localStorage.setItem("celda_VST", JSON.stringify(celdas));
+        localStorage.setItem("diametro_ext_VST", JSON.stringify(diametro_ext));
+        localStorage.setItem("diametro_int_VST", JSON.stringify(diametro_int));
+        localStorage.setItem("pres_caldera_VST", JSON.stringify(pres_caldera));
+
+
+      // Guardar presiones en localStorage
+      localStorage.removeItem("datos_medidos");
+      localStorage.setItem("datos_medidos",JSON.stringify({p1:Number(p1),p2:Number(p2),p3:Number(p3),p4:tipo==="Banco"?Number(p4_val):null,promedio:Number(promedio),set:Number(set),tipo}));
+
+      // Enviar presiones según tipo
+      if(tipo==="Banco") localStorage.setItem("presiones_banco",JSON.stringify({p1,p2,p3,p4:p4_val}));
+      else if(["VST 2","VST 3"].includes(tipo)) localStorage.setItem("presiones_vst",JSON.stringify({p1,p2,p3}));
+
+      if(aprobadoFinal){
+        const prueba={client_proy,tag,set,seccion,tipo,manometro:tipo==="Banco"?manometro:"N/A",presiones:presiones.map(p=>p.valor),promedio,U_expandida:U,criterio,fecha:new Date().toLocaleString()};
+        const aprobadas=JSON.parse(localStorage.getItem("pruebasAprobadas"))||[];
+        aprobadas.push(prueba);
+        localStorage.setItem("pruebasAprobadas",JSON.stringify(aprobadas));
+        document.getElementById("Tag").value=""; document.getElementById("p1").value=""; document.getElementById("p2").value=""; document.getElementById("p3").value=""; document.getElementById("p4").value="";
+      }
+    }
+
+    function enviarCorreo(){
+      const pruebas=JSON.parse(localStorage.getItem("pruebasAprobadas"))||[];
+      if(pruebas.length===0) return alert("No hay pruebas aprobadas para enviar.");
+      const contenido=pruebas.map((p,i)=>`#${i+1} - ${p.fecha}\nCliente: ${p.client_proy||"N/A"}\nTag: ${p.tag||"N/A"}\nSet: ${p.set} PSI\nSección: ${p.seccion}\nTipo: ${p.tipo}\nManómetro: ${p.manometro}\nPresiones: ${p.presiones.join(", ")}\nPromedio: ${Number(p.promedio).toFixed(2)} PSI\nU expandida: ${p.U_expandida!==null&&p.U_expandida!==undefined?Number(p.U_expandida).toFixed(6):"N/A"}\nCriterio (1%): ${Number(p.criterio).toFixed(6)}`).join("\n----------------\n");
+      const params={to_name:"Valser",to_email:"tecnicodeservicios@valserindustriales.com",message:contenido};
+      emailjs.send("service_vp5zw8m","template_6v8y173",params).then(()=>{ alert("📤 Correo enviado con éxito"); localStorage.removeItem("pruebasAprobadas"); }).catch(err=>{ console.error("EmailJS error:",err); alert("❌ Error al enviar el correo."); });
+    }
+
+    if("serviceWorker" in navigator){ navigator.serviceWorker.register("sw.js").then(()=>console.log("SW registrado correctamente")).catch(e=>console.error("SW falló",e)); }
+  </script>
+    <button
+    onclick="window.location.href='validacion_incertidumbre_banco.html'"
+        style="
+      position: fixed;
+      bottom: 10px;
+      left: 10px;
+      padding: 2px 6px;
+      font-size: 10px;
+      opacity: 0.4;
+      background: #000000;
+      border: 1px solid #aaa;
+      border-radius: 3px;
+      transition: opacity 0.3s;
+      width: auto;
+    "
+        onmouseover="this.style.opacity='1'"
+    onmouseout="this.style.opacity='0.4'">
+    → Validación banco
+
+  </button>
+     <button
+    onclick="window.location.href='validacion_incertidumbre_VST.html'"
+    style="
+      position: fixed;
+      bottom: 30px;
+      left: 10px;
+      padding: 2px 6px;
+      font-size: 10px;
+      opacity: 0.4;
+      background: #000000;
+      border: 1px solid #aaa;
+      border-radius: 3px;
+      transition: opacity 0.3s;
+      width: auto;
+    "
+    onmouseover="this.style.opacity='1'"
+    onmouseout="this.style.opacity='0.4'">
+    → Validación VST
+  </button>
+
+</body>
+</html>
