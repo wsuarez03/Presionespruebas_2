@@ -277,17 +277,14 @@
       }
       else if(["VST 2","VST 3"].includes(tipo)){
         const U_expandida_almacenada=localStorage.getItem("U_expandida_VST");
-        if(!U_expandida_almacenada){
-          aprobadoIncertidumbre=false;
-          mensajeIncert=`⚠️ No hay datos de incertidumbre expandida para VST. Consulta primero la validación VST.`;
-        }else{
+        if(U_expandida_almacenada){
           U=parseFloat(U_expandida_almacenada);
           const valorMaximoIncertidumbre=promedio*0.01;
           if(valorMaximoIncertidumbre<U){
             aprobadoIncertidumbre=false;
             mensajeIncert=`❌ Incertidumbre expandida`;
           }else{
-            mensajeIncert=`✅ Criterio de incertidumbre ok. Valor máximo permitido (1%): ${valorMaximoIncertidumbre.toFixed(6)}. Incertidumbre expandida: ${U.toFixed(6)}`;
+            mensajeIncert=``;
           }
         }
       }
