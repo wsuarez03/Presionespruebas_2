@@ -1,4 +1,4 @@
-const CACHE_NAME = 'presiones-cache-v20'; // Nuevo para forzar actualización
+const CACHE_NAME = 'presiones-cache-v21'; // Nuevo para forzar actualización
 
 const urlsToCache = [
   './',
@@ -86,4 +86,5 @@ self.addEventListener('fetch', event => {
       })
   );
 });
+
 
